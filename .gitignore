@@ -1,34 +1,45 @@
+# Gitignore for AI Fitness Dashboard App
+
 # Python
 __pycache__/
 *.pyc
-*.pyo
 *.pyd
-.Python
+*.pyo
+.Python/
+build/
+dist/
 venv/
 .venv/
-env/
+.pytest_cache/
 
 # Node.js
 node_modules/
-dist/
-build/
-.parcel-cache/
+/frontend/dist/
+/frontend/build/
+/frontend/.parcel-cache/
 
 # Environment variables
 .env
-
-# IDEs and other tools
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# Logs and temporary files
-*.log
-*.tmp
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 
 # Docker
 .dockerignore
 
-# Google Apps Script (original source, not part of the new project)
-Code.gs
+# Logs
+*.log
+log/
+
+# OS generated files
+.DS_Store
+.Trashes
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Data directory (user-specific data)
+/backend/app/data/

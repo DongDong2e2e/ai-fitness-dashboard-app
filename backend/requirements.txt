@@ -1,5 +1,6 @@
 fastapi
 uvicorn[standard]
 gspread
-oauth2client
 python-dotenv
+SQLAlchemy
+psycopg2-binary
