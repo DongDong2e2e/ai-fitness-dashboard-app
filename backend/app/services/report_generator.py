@@ -1,10 +1,10 @@
 from sqlalchemy.orm import Session
 
-from backend.app import prompts
-from backend.app.config import Config
-from backend.app.services.gemini_ai import GeminiAIService
-from backend.app.services.report_analyzer import ReportAnalyzer
-from backend.app.services.email_service import EmailService
+from .. import prompts
+from ..config import Config
+from .gemini_ai import GeminiAIService
+from .report_analyzer import ReportAnalyzer
+from .email_service import EmailService
 
 class ReportGeneratorService:
     def __init__(self):

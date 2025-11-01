@@ -3,12 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import os
 
-from . import models, schemas, crud
+from . import models, schemas
 from .database import engine, get_db
 from .services.report_generator import ReportGeneratorService
-from .services.chatbot_service import ChatbotService
 from .services.data_importer import DataImporterService
 from .services.dashboard_service import DashboardService
+from .routers import workouts, inbody, chatbot
+from .dependencies import get_dashboard_service, get_report_generator_service
 
 # 데이터베이스 테이블 생성
 models.Base.metadata.create_all(bind=engine)
@@ -25,10 +26,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 서비스 초기화
-report_generator_service = ReportGeneratorService()
-chatbot_service = ChatbotService()
-dashboard_service = DashboardService()
+# 라우터 포함
+app.include_router(workouts.router, tags=["workouts"])
+app.include_router(inbody.router, tags=["inbody"])
+app.include_router(chatbot.router, tags=["chatbot"])
 
 @app.get("/")
 def read_root():
@@ -52,36 +53,15 @@ def migrate_data_from_csv(db: Session = Depends(get_db)):
 
 
 @app.get("/api/dashboard-data", response_model=schemas.DashboardData)
-def get_dashboard_data(db: Session = Depends(get_db)):
+def get_dashboard_data(db: Session = Depends(get_db), dashboard_service: DashboardService = Depends(get_dashboard_service)):
     try:
         return dashboard_service.get_dashboard_data(db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to retrieve dashboard data: {e}")
 
-# --- 데이터 생성 엔드포인트 ---
-@app.post("/api/workout-logs", response_model=schemas.WorkoutLog)
-def create_new_workout_log(log: schemas.WorkoutLogCreate, db: Session = Depends(get_db)):
-    try:
-        return crud.create_workout_log(db=db, log=log)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create workout log: {e}")
-
-@app.post("/api/inbody-records", response_model=schemas.Inbody)
-def create_new_inbody_record(inbody: schemas.InbodyCreate, db: Session = Depends(get_db)):
-    # 날짜 중복 체크
-    existing_record = db.query(models.Inbody).filter(models.Inbody.date == inbody.date).first()
-    if existing_record:
-        raise HTTPException(status_code=409, detail="A record for this date already exists.")
-    try:
-        return crud.create_inbody_record(db=db, inbody=inbody)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create InBody record: {e}")
-
-# --- 리포트 및 챗봇 엔드포인트 ---
+# --- 리포트 엔드포인트 ---
 @app.post("/send-report/{report_type}")
-async def send_report(report_type: str, db: Session = Depends(get_db)):
+async def send_report(report_type: str, db: Session = Depends(get_db), report_generator_service: ReportGeneratorService = Depends(get_report_generator_service)):
     if report_type not in ["week", "month", "quarter", "year"]:
         raise HTTPException(status_code=400, detail="Invalid report type.")
     try:
@@ -89,17 +69,3 @@ async def send_report(report_type: str, db: Session = Depends(get_db)):
         return {"message": f"{report_type.capitalize()} report sent successfully."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to send report: {e}")
-
-@app.post("/chat")
-async def chat_with_bot(message: dict, db: Session = Depends(get_db)):
-    user_message = message.get("message")
-    if not user_message:
-        raise HTTPException(status_code=400, detail="Message cannot be empty.")
-    try:
-        response = chatbot_service.process_user_message(user_message, db)
-        return response
-    except ValueError as e:
-        # GEMINI_API_KEY가 설정되지 않았을 때 등 설정 관련 오류 처리
-        raise HTTPException(status_code=500, detail=f"Chatbot configuration error: {e}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Chatbot processing failed: {e}")
