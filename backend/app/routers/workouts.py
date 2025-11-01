@@ -6,7 +6,7 @@ from ..database import get_db
 
 router = APIRouter()
 
-@router.post("/api/workout-logs", response_model=schemas.WorkoutLog)
+@router.post("/workout-logs", response_model=schemas.WorkoutLog)
 def create_new_workout_log(log: schemas.WorkoutLogCreate, db: Session = Depends(get_db)):
     try:
         return crud.create_workout_log(db=db, log=log)

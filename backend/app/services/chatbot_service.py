@@ -5,6 +5,7 @@ from sqlalchemy import func, and_
 
 from backend.app import models, prompts
 from backend.app.services.gemini_ai import GeminiAIService
+from backend.app.utils import apply_date_range_filter
 
 class ChatbotService:
     def __init__(self):
@@ -71,10 +72,7 @@ class ChatbotService:
         if conditions.get("exercise_names"):
             query = query.filter(models.ExerciseInfo.name.in_(conditions["exercise_names"]))
 
-        if conditions.get("date_range_start") and conditions.get("date_range_end"):
-            start_date = datetime.strptime(conditions["date_range_start"], "%Y-%m-%d").date()
-            end_date = datetime.strptime(conditions["date_range_end"], "%Y-%m-%d").date()
-            query = query.filter(models.WorkoutLog.date.between(start_date, end_date))
+        query = apply_date_range_filter(query, models.WorkoutLog, conditions.get("date_range_start"), conditions.get("date_range_end"))
 
         filtered_logs = query.all()
         if not filtered_logs:
@@ -102,10 +100,7 @@ class ChatbotService:
     def _find_inbody_data(self, conditions: dict, db: Session) -> str:
         query = db.query(models.Inbody)
 
-        if conditions.get("date_range_start") and conditions.get("date_range_end"):
-            start_date = datetime.strptime(conditions["date_range_start"], "%Y-%m-%d").date()
-            end_date = datetime.strptime(conditions["date_range_end"], "%Y-%m-%d").date()
-            query = query.filter(models.Inbody.date.between(start_date, end_date))
+        query = apply_date_range_filter(query, models.Inbody, conditions.get("date_range_start"), conditions.get("date_range_end"))
 
         filtered_data = query.order_by(models.Inbody.date.asc()).all()
         if not filtered_data:

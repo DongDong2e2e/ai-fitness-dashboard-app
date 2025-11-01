@@ -1,33 +1,29 @@
-import os
-from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
 
-# .env 파일에서 환경 변수 로드
-load_dotenv()
-
-class Config:
+class Settings(BaseSettings):
     # Gemini API Key
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    if not GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY 환경 변수가 설정되지 않았습니다.")
+    GEMINI_API_KEY: str
 
     # Report Recipient Email
-    REPORT_RECIPIENT_EMAIL = os.getenv("REPORT_RECIPIENT_EMAIL")
+    REPORT_RECIPIENT_EMAIL: str | None = None
 
     # User Name for Reports
-    USER_NAME = os.getenv("USER_NAME")
+    USER_NAME: str | None = None
 
     # Email Configuration
-    SMTP_SERVER = os.getenv("SMTP_SERVER")
-    try:
-        SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-    except (ValueError, TypeError):
-        SMTP_PORT = 587
-    SENDER_EMAIL = os.getenv("SENDER_EMAIL")
-    SENDER_PASSWORD = os.getenv("SENDER_PASSWORD")
+    SMTP_SERVER: str | None = None
+    SMTP_PORT: int = 587
+    SENDER_EMAIL: str | None = None
+    SENDER_PASSWORD: str | None = None
 
     # PostgreSQL Database Configuration
-    POSTGRES_USER = os.getenv("POSTGRES_USER", "postgres")
-    POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
-    POSTGRES_DB = os.getenv("POSTGRES_DB", "fitness_db")
-    POSTGRES_HOST = os.getenv("POSTGRES_HOST", "db") # Docker Compose 서비스 이름
-    POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_DB: str = "fitness_db"
+    POSTGRES_HOST: str = "db"
+    POSTGRES_PORT: int = 5432
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()

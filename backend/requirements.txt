@@ -5,4 +5,5 @@ python-dotenv
 SQLAlchemy
 psycopg2-binary
 pytest
-httpx
+httpxpydantic-settings
+python-dotenv

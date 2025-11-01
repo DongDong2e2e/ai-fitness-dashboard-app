@@ -1,11 +1,11 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from .config import Config
+from .config import settings
 
 # 데이터베이스 연결 URL 생성
 # postgresql://{사용자이름}:{비밀번호}@{호스트}:{포트}/{데이터베이스 이름}
-SQLALCHEMY_DATABASE_URL = f"postgresql://{Config.POSTGRES_USER}:{Config.POSTGRES_PASSWORD}@{Config.POSTGRES_HOST}:{Config.POSTGRES_PORT}/{Config.POSTGRES_DB}"
+SQLALCHEMY_DATABASE_URL = f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
 
 # 데이터베이스 엔진 생성
 engine = create_engine(SQLALCHEMY_DATABASE_URL)

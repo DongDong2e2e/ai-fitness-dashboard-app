@@ -10,6 +10,7 @@ from .services.data_importer import DataImporterService
 from .services.dashboard_service import DashboardService
 from .routers import workouts, inbody, chatbot
 from .dependencies import get_dashboard_service, get_report_generator_service
+from .exceptions import DuplicateRecordError, duplicate_record_exception_handler
 
 # 데이터베이스 테이블 생성
 models.Base.metadata.create_all(bind=engine)
@@ -26,16 +27,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 예외 핸들러 추가
+app.add_exception_handler(DuplicateRecordError, duplicate_record_exception_handler)
+
 # 라우터 포함
-app.include_router(workouts.router, tags=["workouts"])
-app.include_router(inbody.router, tags=["inbody"])
-app.include_router(chatbot.router, tags=["chatbot"])
+app.include_router(workouts.router, prefix="/api/v1", tags=["workouts"])
+app.include_router(inbody.router, prefix="/api/v1", tags=["inbody"])
+app.include_router(chatbot.router, prefix="/api/v1", tags=["chatbot"])
 
 @app.get("/")
 def read_root():
     return {"Hello": "Backend World with PostgreSQL"}
 
-@app.post("/api/migrate-data-from-csv", response_model=schemas.CSVMigrationResponse)
+@app.post("/api/v1/migrate-data-from-csv", response_model=schemas.CSVMigrationResponse)
 def migrate_data_from_csv(db: Session = Depends(get_db)):
     """로컬 CSV 파일에서 데이터를 읽어와 PostgreSQL 데이터베이스에 저장합니다."""
     try:
@@ -52,7 +56,7 @@ def migrate_data_from_csv(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred during data migration: {e}")
 
 
-@app.get("/api/dashboard-data", response_model=schemas.DashboardData)
+@app.get("/api/v1/dashboard-data", response_model=schemas.DashboardData)
 def get_dashboard_data(db: Session = Depends(get_db), dashboard_service: DashboardService = Depends(get_dashboard_service)):
     try:
         return dashboard_service.get_dashboard_data(db)
@@ -60,7 +64,7 @@ def get_dashboard_data(db: Session = Depends(get_db), dashboard_service: Dashboa
         raise HTTPException(status_code=500, detail=f"Failed to retrieve dashboard data: {e}")
 
 # --- 리포트 엔드포인트 ---
-@app.post("/send-report/{report_type}")
+@app.post("/api/v1/send-report/{report_type}")
 async def send_report(report_type: str, db: Session = Depends(get_db), report_generator_service: ReportGeneratorService = Depends(get_report_generator_service)):
     if report_type not in ["week", "month", "quarter", "year"]:
         raise HTTPException(status_code=400, detail="Invalid report type.")
