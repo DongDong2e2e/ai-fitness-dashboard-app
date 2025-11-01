@@ -3,59 +3,94 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct
 
 from backend.app import models
-from backend.app.config import Config
+from backend.app.config import settings
+
+# Constants
+NO_DATA = "없음"
+NO_CHANGE = " (변화 없음)"
+UP_ARROW = " ▲"
+DOWN_ARROW = " ▼"
 
 class ReportAnalyzer:
     def analyze_data_for_period(self, db: Session, period_type: str):
         today = datetime.now().date()
-        
         start_date, end_date, prev_start_date, prev_end_date, period_name, weeks_in_period = self._get_date_ranges(today, period_type)
 
-        def extract_stats_for_period(start_dt, end_dt):
-            if not start_dt or not end_dt:
-                return {'totalWorkoutDays': 0, 'totalVolume': 0, 'mainFocusBodyPart': '없음', 'topExercises': [], 'bestPerformance': {'exercise': '없음', 'weight': 0, 'reps': 0}}
+        current_stats = self._extract_stats_for_period(db, start_date, end_date)
+        previous_stats = self._extract_stats_for_period(db, prev_start_date, prev_end_date)
 
-            base_query = db.query(models.WorkoutLog).filter(models.WorkoutLog.date.between(start_dt, end_dt))
-            period_data = base_query.all()
-            if not period_data:
-                return {'totalWorkoutDays': 0, 'totalVolume': 0, 'mainFocusBodyPart': '없음', 'topExercises': [], 'bestPerformance': {'exercise': '없음', 'weight': 0, 'reps': 0}}
+        avg_workout_days_per_week = self._calculate_avg_workout_days(current_stats, weeks_in_period)
+        pr = self._calculate_pr(db, current_stats, start_date)
+        inbody_changes = self._calculate_inbody_changes(db, start_date, end_date)
 
-            total_workout_days = db.query(func.count(distinct(models.WorkoutLog.date))).filter(models.WorkoutLog.date.between(start_dt, end_dt)).scalar()
-            total_volume = db.query(func.sum(models.WorkoutLog.volume)).filter(models.WorkoutLog.date.between(start_dt, end_dt)).scalar() or 0
+        return {
+            'userName': settings.USER_NAME,
+            'periodName': period_name,
+            'startDate': start_date.strftime('%Y-%m-%d'),
+            'endDate': end_date.strftime('%Y-%m-%d'),
+            'current': current_stats,
+            'previous': previous_stats,
+            'avgWorkoutDaysPerWeek': avg_workout_days_per_week,
+            'prExercise': pr['exercise'],
+            'prRecord': pr['record'],
+            **inbody_changes
+        }
 
-            category_vol = db.query(models.ExerciseInfo.category, func.sum(models.WorkoutLog.volume).label('vol'))\
-                .join(models.WorkoutLog, models.ExerciseInfo.id == models.WorkoutLog.exercise_id)\
-                .filter(models.WorkoutLog.date.between(start_dt, end_dt))\
-                .group_by(models.ExerciseInfo.category).order_by(func.sum(models.WorkoutLog.volume).desc()).first()
-            main_focus_body_part = category_vol[0] if category_vol else '없음'
+    def _extract_stats_for_period(self, db: Session, start_dt, end_dt):
+        if not start_dt or not end_dt:
+            return self._empty_stats()
 
-            top_exercises_query = db.query(models.ExerciseInfo.name, func.sum(models.WorkoutLog.volume).label('vol'))\
-                .join(models.WorkoutLog, models.ExerciseInfo.id == models.WorkoutLog.exercise_id)\
-                .filter(models.WorkoutLog.date.between(start_dt, end_dt))\
-                .group_by(models.ExerciseInfo.name).order_by(func.sum(models.WorkoutLog.volume).desc()).limit(5).all()
-            top_exercises_formatted = [{'exercise': name, 'volume': f'{volume:.0f}kg'} for name, volume in top_exercises_query]
+        base_query = db.query(models.WorkoutLog).filter(models.WorkoutLog.date.between(start_dt, end_dt))
+        if not base_query.first():
+            return self._empty_stats()
 
-            best_perf_log = db.query(models.WorkoutLog).join(models.ExerciseInfo)\
-                .filter(models.WorkoutLog.date.between(start_dt, end_dt))\
-                .order_by(models.WorkoutLog.weight.desc()).first()
-            period_best = {'exercise': '없음', 'weight': 0.0, 'reps': 0.0}
-            if best_perf_log:
-                period_best = {'exercise': best_perf_log.exercise.name, 'weight': best_perf_log.weight, 'reps': best_perf_log.reps_or_time}
+        total_workout_days = db.query(func.count(distinct(models.WorkoutLog.date))).filter(models.WorkoutLog.date.between(start_dt, end_dt)).scalar()
+        total_volume = db.query(func.sum(models.WorkoutLog.volume)).filter(models.WorkoutLog.date.between(start_dt, end_dt)).scalar() or 0
 
-            return {
-                'totalWorkoutDays': total_workout_days,
-                'totalVolume': f'{total_volume:.0f}',
-                'mainFocusBodyPart': main_focus_body_part,
-                'topExercises': top_exercises_formatted,
-                'bestPerformance': period_best
-            }
+        main_focus_body_part = self._get_main_focus(db, start_dt, end_dt)
+        top_exercises = self._get_top_exercises(db, start_dt, end_dt)
+        period_best = self._get_best_performance(db, start_dt, end_dt)
 
-        current_stats = extract_stats_for_period(start_date, end_date)
-        previous_stats = extract_stats_for_period(prev_start_date, prev_end_date)
+        return {
+            'totalWorkoutDays': total_workout_days,
+            'totalVolume': f'{total_volume:.0f}',
+            'mainFocusBodyPart': main_focus_body_part,
+            'topExercises': top_exercises,
+            'bestPerformance': period_best
+        }
 
-        avg_workout_days_per_week = round(current_stats['totalWorkoutDays'] / weeks_in_period) if weeks_in_period > 0 and current_stats['totalWorkoutDays'] > 0 else 0
+    def _empty_stats(self):
+        return {'totalWorkoutDays': 0, 'totalVolume': 0, 'mainFocusBodyPart': NO_DATA, 'topExercises': [], 'bestPerformance': {'exercise': NO_DATA, 'weight': 0, 'reps': 0}}
 
-        pr = {'exercise': '없음', 'record': ''}
+    def _get_main_focus(self, db: Session, start_dt, end_dt):
+        category_vol = db.query(models.ExerciseInfo.category, func.sum(models.WorkoutLog.volume).label('vol'))\
+            .join(models.WorkoutLog, models.ExerciseInfo.id == models.WorkoutLog.exercise_id)\
+            .filter(models.WorkoutLog.date.between(start_dt, end_dt))\
+            .group_by(models.ExerciseInfo.category).order_by(func.sum(models.WorkoutLog.volume).desc()).first()
+        return category_vol[0] if category_vol else NO_DATA
+
+    def _get_top_exercises(self, db: Session, start_dt, end_dt):
+        top_exercises_query = db.query(models.ExerciseInfo.name, func.sum(models.WorkoutLog.volume).label('vol'))\
+            .join(models.WorkoutLog, models.ExerciseInfo.id == models.WorkoutLog.exercise_id)\
+            .filter(models.WorkoutLog.date.between(start_dt, end_dt))\
+            .group_by(models.ExerciseInfo.name).order_by(func.sum(models.WorkoutLog.volume).desc()).limit(5).all()
+        return [{'exercise': name, 'volume': f'{volume:.0f}kg'} for name, volume in top_exercises_query]
+
+    def _get_best_performance(self, db: Session, start_dt, end_dt):
+        best_perf_log = db.query(models.WorkoutLog).join(models.ExerciseInfo)\
+            .filter(models.WorkoutLog.date.between(start_dt, end_dt))\
+            .order_by(models.WorkoutLog.weight.desc()).first()
+        if best_perf_log:
+            return {'exercise': best_perf_log.exercise.name, 'weight': best_perf_log.weight, 'reps': best_perf_log.reps_or_time}
+        return {'exercise': NO_DATA, 'weight': 0.0, 'reps': 0.0}
+
+    def _calculate_avg_workout_days(self, current_stats, weeks_in_period):
+        if weeks_in_period > 0 and current_stats['totalWorkoutDays'] > 0:
+            return round(current_stats['totalWorkoutDays'] / weeks_in_period)
+        return 0
+
+    def _calculate_pr(self, db: Session, current_stats, start_date):
+        pr = {'exercise': NO_DATA, 'record': ''}
         if current_stats['bestPerformance']['weight'] > 0:
             best_exercise_name = current_stats['bestPerformance']['exercise']
             best_exercise = db.query(models.ExerciseInfo).filter(models.ExerciseInfo.name == best_exercise_name).first()
@@ -66,32 +101,21 @@ class ReportAnalyzer:
                 if current_stats['bestPerformance']['weight'] > previous_best_weight:
                     pr['exercise'] = best_exercise_name
                     pr['record'] = f"{current_stats['bestPerformance']['weight']:.1f}kg x {current_stats['bestPerformance']['reps']:.0f}회"
+        return pr
 
+    def _calculate_inbody_changes(self, db: Session, start_date, end_date):
         start_inbody = db.query(models.Inbody).filter(models.Inbody.date < start_date).order_by(models.Inbody.date.desc()).first()
         end_inbody = db.query(models.Inbody).filter(models.Inbody.date <= end_date).order_by(models.Inbody.date.desc()).first()
         if not end_inbody: end_inbody = start_inbody
 
-        end_weight_str, end_muscle_str, end_fat_str = 'N/A', 'N/A', 'N/A'
         if end_inbody:
             start_w, start_m, start_f = (start_inbody.weight, start_inbody.muscle_mass, start_inbody.fat_percent) if start_inbody else (end_inbody.weight, end_inbody.muscle_mass, end_inbody.fat_percent)
-            end_weight_str = f"{end_inbody.weight} kg{self._get_change_str(end_inbody.weight, start_w)}"
-            end_muscle_str = f"{end_inbody.muscle_mass} kg{self._get_change_str(end_inbody.muscle_mass, start_m)}"
-            end_fat_str = f"{end_inbody.fat_percent * 100:.1f}%{self._get_change_str(end_inbody.fat_percent, start_f)}"
-
-        return {
-            'userName': Config.USER_NAME,
-            'periodName': period_name,
-            'startDate': start_date.strftime('%Y-%m-%d'),
-            'endDate': end_date.strftime('%Y-%m-%d'),
-            'current': current_stats,
-            'previous': previous_stats,
-            'avgWorkoutDaysPerWeek': avg_workout_days_per_week,
-            'prExercise': pr['exercise'],
-            'prRecord': pr['record'],
-            'endWeight': end_weight_str,
-            'endMuscleMass': end_muscle_str,
-            'endBodyFatPercent': end_fat_str
-        }
+            return {
+                'endWeight': f"{end_inbody.weight} kg{self._get_change_str(end_inbody.weight, start_w)}",
+                'endMuscleMass': f"{end_inbody.muscle_mass} kg{self._get_change_str(end_inbody.muscle_mass, start_m)}",
+                'endBodyFatPercent': f"{end_inbody.fat_percent * 100:.1f}%{self._get_change_str(end_inbody.fat_percent, start_f)}"
+            }
+        return {'endWeight': 'N/A', 'endMuscleMass': 'N/A', 'endBodyFatPercent': 'N/A'}
 
     def _get_date_ranges(self, today, period_type):
         if period_type == 'week':
@@ -127,8 +151,8 @@ class ReportAnalyzer:
     def _get_change_str(self, current, previous):
         try:
             diff = float(current) - float(previous)
-            if diff > 0: return f' (+{diff:.2f} ▲)'
-            if diff < 0: return f' ({diff:.2f} ▼)'
-            return ' (변화 없음)'
+            if diff > 0: return f' (+{diff:.2f}{UP_ARROW})'
+            if diff < 0: return f' ({diff:.2f}{DOWN_ARROW})'
+            return NO_CHANGE
         except (ValueError, TypeError):
             return ''

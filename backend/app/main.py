@@ -1,22 +1,27 @@
 from fastapi import FastAPI, HTTPException, Depends
+from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 import os
 
 from . import models, schemas
-from .database import engine, get_db
+from .database import get_engine, get_db
 from .services.report_generator import ReportGeneratorService
 from .services.data_importer import DataImporterService
 from .services.dashboard_service import DashboardService
-from .routers import workouts, inbody, chatbot
+from .routers import workouts, inbody, chatbot, exercises
 from .dependencies import get_dashboard_service, get_report_generator_service
 from .exceptions import DuplicateRecordError, duplicate_record_exception_handler
 
-# 데이터베이스 테이블 생성
-models.Base.metadata.create_all(bind=engine)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 데이터베이스 테이블 생성
+    engine = get_engine()
+    models.Base.metadata.create_all(bind=engine)
+    yield
 
 # FastAPI 앱 생성
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 # CORS 미들웨어 설정
 app.add_middleware(
@@ -34,6 +39,7 @@ app.add_exception_handler(DuplicateRecordError, duplicate_record_exception_handl
 app.include_router(workouts.router, prefix="/api/v1", tags=["workouts"])
 app.include_router(inbody.router, prefix="/api/v1", tags=["inbody"])
 app.include_router(chatbot.router, prefix="/api/v1", tags=["chatbot"])
+app.include_router(exercises.router, prefix="/api/v1", tags=["exercises"])
 
 @app.get("/")
 def read_root():

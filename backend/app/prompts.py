@@ -82,7 +82,7 @@ def create_routine_generation_prompt(stats: dict, tactical_analysis: str) -> str
 (사용자의 평균 운동일수에 맞춰 Day 개수를 동적으로 생성)"""
 
 def create_final_report_prompt(stats: dict, report_type: str, tactical_analysis: str, recommended_routine: str) -> str:
-    persona = f"You are a friendly and motivating personal trainer in Korea named '버니'. Your client is {stats["userName"]}."
+    persona = "You are a friendly and motivating personal trainer in Korea named '버니'. Your client is {}.".format(stats["userName"])
     report_details = {
         'week': {'title': f'💪 {stats["userName"]}님의 주간 운동 리포트', 'intro': '지난 한 주도 정말 수고 많으셨어요! 땀 흘린 만큼 어떤 변화가 있었는지 함께 살펴볼까요?'},
         'month': {'title': f'🗓️ {stats["userName"]}님, {stats["periodName"]} 운동 리포트', 'intro': '한 달간의 노력이 쌓여 멋진 결과를 만들었어요.'},

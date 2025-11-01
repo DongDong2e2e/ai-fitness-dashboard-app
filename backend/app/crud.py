@@ -4,6 +4,13 @@ from . import models, schemas
 def get_exercise_by_name(db: Session, name: str):
     return db.query(models.ExerciseInfo).filter(models.ExerciseInfo.name == name).first()
 
+def create_exercise(db: Session, exercise: schemas.ExerciseInfoCreate) -> models.ExerciseInfo:
+    db_exercise = models.ExerciseInfo(**exercise.dict())
+    db.add(db_exercise)
+    db.commit()
+    db.refresh(db_exercise)
+    return db_exercise
+
 def create_workout_log(db: Session, log: schemas.WorkoutLogCreate) -> models.WorkoutLog:
     exercise = get_exercise_by_name(db, log.exercise_name)
     if not exercise:

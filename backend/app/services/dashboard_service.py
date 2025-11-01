@@ -35,9 +35,12 @@ class DashboardService:
                     workout_data[name] = {"labels": sorted_dates, "data": [daily_max[date] for date in sorted_dates]}
             return workout_data
 
-        push_exercises = ['벤치프레스', '덤벨 숄더 프레스', '인클라인 체스트 프레스']
-        pull_exercises = ['루마니안 데드리프트', '티바 로우']
-        leg_exercises = ['레그 프레스', '브이 스쿼트', '리버스 브이 스쿼트', '힙 쓰러스트']
+        def get_exercises_by_category(category_name: str) -> list[str]:
+            return [exercise.name for exercise in db.query(models.ExerciseInfo).filter(models.ExerciseInfo.category == category_name).all()]
+
+        push_exercises = get_exercises_by_category("Push")
+        pull_exercises = get_exercises_by_category("Pull")
+        leg_exercises = get_exercises_by_category("Leg")
         
         push_data = extract_workout_data(push_exercises)
         pull_data = extract_workout_data(pull_exercises)

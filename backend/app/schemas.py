@@ -6,7 +6,10 @@ from typing import List, Dict, Optional
 class ExerciseInfoBase(BaseModel):
     name: str
     category: Optional[str] = None
-    tool: Optional[str] = None
+    calc_multiplier: Optional[float] = 1.0
+
+class ExerciseInfoCreate(ExerciseInfoBase):
+    pass
 
 class ExerciseInfo(ExerciseInfoBase):
     id: int

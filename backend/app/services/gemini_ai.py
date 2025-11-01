@@ -2,11 +2,11 @@ import os
 import requests
 import json
 import time
-from backend.app.config import Config
+from backend.app.config import settings
 
 class GeminiAIService:
     def __init__(self):
-        self.api_key = Config.GEMINI_API_KEY
+        self.api_key = settings.GEMINI_API_KEY
         if not self.api_key or self.api_key == "YOUR_GEMINI_API_KEY":
             raise ValueError("GEMINI_API_KEY is not set in environment variables or is default.")
         self.base_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"

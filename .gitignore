@@ -43,3 +43,4 @@ Thumbs.db
 
 # Data directory (user-specific data)
 /backend/app/data/
+/backend/data

@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 
 from .. import prompts
-from ..config import Config
+from ..config import settings
 from .gemini_ai import GeminiAIService
 from .report_analyzer import ReportAnalyzer
 from .email_service import EmailService
@@ -43,8 +43,8 @@ class ReportGeneratorService:
             report_html = self.gemini_service.call_gemini_api(final_report_prompt, 'html')
 
             # 3. 이메일 발송
-            subject = f"💪 {Config.USER_NAME}님, {stats['periodName']} 운동 리포트 + 맞춤 루틴이 도착했습니다!"
-            self.email_service.send_email(subject, Config.REPORT_RECIPIENT_EMAIL, report_html)
+            subject = f"💪 {settings.USER_NAME}님, {stats['periodName']} 운동 리포트 + 맞춤 루틴이 도착했습니다!"
+            self.email_service.send_email(subject, settings.REPORT_RECIPIENT_EMAIL, report_html)
 
             print(f"[{report_type}] 리포트 생성 및 발송 프로세스를 성공적으로 완료했습니다.")
 
