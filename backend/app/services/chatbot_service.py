@@ -3,7 +3,7 @@ import json
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 
-from backend.app import models, prompts
+from backend.app.prompts import chatbot as prompts
 from backend.app.services.gemini_ai import GeminiAIService
 from backend.app.utils import apply_date_range_filter
 

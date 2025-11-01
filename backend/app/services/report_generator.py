@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from .. import prompts
+from ..prompts import report as prompts
 from ..config import settings
 from .gemini_ai import GeminiAIService
 from .report_analyzer import ReportAnalyzer

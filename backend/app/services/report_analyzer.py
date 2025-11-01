@@ -33,6 +33,8 @@ class ReportAnalyzer:
             'avgWorkoutDaysPerWeek': avg_workout_days_per_week,
             'prExercise': pr['exercise'],
             'prRecord': pr['record'],
+            'fitness_goal': '근력 증가',
+            'limitations': '오른쪽 어깨에 약간의 불편함이 있음',
             **inbody_changes
         }
 
