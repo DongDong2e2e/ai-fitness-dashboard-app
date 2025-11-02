@@ -1,7 +1,7 @@
 import csv
 from datetime import datetime
 from sqlalchemy.orm import Session
-from backend.app import models, schemas
+from app import models, schemas
 from pydantic import ValidationError
 
 class DataImporterService:

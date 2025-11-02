@@ -34,6 +34,8 @@ def create_workout_log(db: Session, log: schemas.WorkoutLogCreate) -> models.Wor
     db.add(db_log)
     db.commit()
     db.refresh(db_log)
+    # Eagerly load the exercise relationship for the response model
+    db_log.exercise = exercise
     return db_log
 
 def create_inbody_record(db: Session, inbody: schemas.InbodyCreate) -> models.Inbody:

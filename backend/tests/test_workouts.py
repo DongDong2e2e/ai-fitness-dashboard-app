@@ -14,7 +14,7 @@ def test_create_workout_log(client: TestClient, db_session: Session):
     # 2. Now, create the workout log
     response = client.post(
         "/api/v1/workout-logs",
-        json={"date": "2025-01-01", "exercise_name": "벤치프레스", "set_type": "Main", "set_num": 1, "weight": 100, "reps_or_time": 10, "unit": "회"},
+        json={"date": "2025-01-01", "exercise_name": "벤치프레스", "set_type": "Main", "set_num": "1", "weight": 100, "reps_or_time": 10, "unit": "회"},
     )
     assert response.status_code == 200
     data = response.json()

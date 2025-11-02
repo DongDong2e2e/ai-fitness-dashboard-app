@@ -2,7 +2,7 @@ import os
 import requests
 import json
 import time
-from backend.app.config import settings
+from app.config import settings
 
 class GeminiAIService:
     def __init__(self):

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from .. import crud, models, schemas
@@ -8,7 +8,7 @@ from ..exceptions import DuplicateRecordError
 router = APIRouter()
 
 @router.post("/inbody-records", response_model=schemas.Inbody)
-def create_new_inbody_record(inbody: schemas.InbodyCreate, db: Session = Depends(get_db)):
+def create_new_inbody_record(inbody: schemas.InbodyCreate, request: Request, db: Session = Depends(get_db)):
     # 날짜 중복 체크
     existing_record = db.query(models.Inbody).filter(models.Inbody.date == inbody.date).first()
     if existing_record:

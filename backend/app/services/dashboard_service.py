@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from backend.app import models
+from app import models
 
 class DashboardService:
     def get_dashboard_data(self, db: Session) -> dict:

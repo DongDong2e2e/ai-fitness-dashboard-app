@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ..services.chatbot_service import ChatbotService
@@ -8,7 +8,7 @@ from ..dependencies import get_chatbot_service
 router = APIRouter()
 
 @router.post("/chat")
-async def chat_with_bot(message: dict, db: Session = Depends(get_db), chatbot_service: ChatbotService = Depends(get_chatbot_service)):
+async def chat_with_bot(message: dict, request: Request, db: Session = Depends(get_db), chatbot_service: ChatbotService = Depends(get_chatbot_service)):
     user_message = message.get("message")
     if not user_message:
         raise HTTPException(status_code=400, detail="Message cannot be empty.")

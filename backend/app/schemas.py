@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, computed_field
 from datetime import date
 from typing import List, Dict, Optional
 
@@ -18,7 +18,6 @@ class ExerciseInfo(ExerciseInfoBase):
 
 class WorkoutLogBase(BaseModel):
     date: date
-    exercise_name: str
     set_type: str
     set_num: str
     weight: float
@@ -26,15 +25,21 @@ class WorkoutLogBase(BaseModel):
     unit: str
 
 class WorkoutLogCreate(WorkoutLogBase):
-    pass
+    exercise_name: str
 
 class WorkoutLog(WorkoutLogBase):
     id: int
     volume: float
     exercise: ExerciseInfo
 
+    @computed_field
+    @property
+    def exercise_name(self) -> str:
+        return self.exercise.name
+
     class Config:
         orm_mode = True
+        from_attributes = True # Pydantic v2
 
 class InbodyBase(BaseModel):
     date: date

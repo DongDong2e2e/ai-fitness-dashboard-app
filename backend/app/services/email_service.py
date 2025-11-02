@@ -1,6 +1,6 @@
 import smtplib
 from email.mime.text import MIMEText
-from backend.app.config import settings
+from app.config import settings
 
 class EmailService:
     def send_email(self, subject: str, recipient: str, html_content: str):

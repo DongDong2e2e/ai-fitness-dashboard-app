@@ -2,8 +2,8 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct
 
-from backend.app import models
-from backend.app.config import settings
+from app import models
+from app.config import settings
 
 # Constants
 NO_DATA = "없음"

@@ -1,11 +1,13 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import create_engine
 import os
 
 from . import models, schemas
-from .database import get_engine, get_db
+from .database import Base, get_db
+from .config import settings
 from .services.report_generator import ReportGeneratorService
 from .services.data_importer import DataImporterService
 from .services.dashboard_service import DashboardService
@@ -15,15 +17,37 @@ from .exceptions import DuplicateRecordError, duplicate_record_exception_handler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 데이터베이스 테이블 생성
-    engine = get_engine()
-    models.Base.metadata.create_all(bind=engine)
+    if os.getenv("TESTING") != "True":
+        # Create engine and session factory
+        SQLALCHEMY_DATABASE_URL = f"postgresql://{settings.POSTGRES_USER}:{settings.POSTGRES_PASSWORD}@{settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}/{settings.POSTGRES_DB}"
+        app.state.engine = create_engine(SQLALCHEMY_DATABASE_URL)
+        app.state.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=app.state.engine)
+
+        # Create tables
+        Base.metadata.create_all(bind=app.state.engine)
     yield
 
-# FastAPI 앱 생성
+# FastAPI app creation
 app = FastAPI(lifespan=lifespan)
 
-# CORS 미들웨어 설정
+# Middleware for creating a new DB session for each request
+@app.middleware("http")
+async def db_session_middleware(request: Request, call_next):
+    response = None
+    try:
+        if os.getenv("TESTING") == "True":
+            # For testing, db session is handled by pytest fixtures
+            response = await call_next(request)
+        else:
+            session = app.state.SessionLocal()
+            request.state.db = session
+            response = await call_next(request)
+    finally:
+        if response and os.getenv("TESTING") != "True":
+            request.state.db.close()
+    return response
+
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -32,10 +56,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 예외 핸들러 추가
+# Exception handler
 app.add_exception_handler(DuplicateRecordError, duplicate_record_exception_handler)
 
-# 라우터 포함
+# Routers
 app.include_router(workouts.router, prefix="/api/v1", tags=["workouts"])
 app.include_router(inbody.router, prefix="/api/v1", tags=["inbody"])
 app.include_router(chatbot.router, prefix="/api/v1", tags=["chatbot"])
