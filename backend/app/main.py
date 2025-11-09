@@ -12,7 +12,7 @@ from .services.report_generator import ReportGeneratorService
 from .services.data_importer import DataImporterService
 from .services.dashboard_service import DashboardService
 from .routers import workouts, inbody, chatbot, exercises, auth
-from .dependencies import get_dashboard_service, get_report_generator_service
+from .dependencies import get_dashboard_service, get_report_generator_service, get_current_active_user
 from .exceptions import DuplicateRecordError, duplicate_record_exception_handler
 
 @asynccontextmanager
