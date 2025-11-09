@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 
+from .. import models
 from ..prompts import report as prompts
 from ..config import settings
 from .gemini_ai import GeminiAIService
@@ -12,13 +13,13 @@ class ReportGeneratorService:
         self.analyzer_service = ReportAnalyzer()
         self.email_service = EmailService()
 
-    def send_report(self, report_type: str, db: Session):
-        """Orchestrates the report generation and sending process."""
+    def send_report(self, report_type: str, db: Session, current_user: models.User):
+        """Orchestrates the report generation and sending process for a specific user."""
         try:
-            print(f"[{report_type}] 리포트 생성을 시작합니다.")
+            print(f"[{report_type}] 리포트 생성을 시작합니다 for user {current_user.email}.")
             
             # 1. 데이터 분석
-            stats = self.analyzer_service.analyze_data_for_period(db, report_type)
+            stats = self.analyzer_service.analyze_data_for_period(db, report_type, user_id=current_user.id)
             if stats['current']['totalWorkoutDays'] == 0:
                 print(f"이번 {stats['periodName']} 운동 기록이 없어 리포트를 발송하지 않습니다.")
                 return
@@ -43,8 +44,8 @@ class ReportGeneratorService:
             report_html = self.gemini_service.call_gemini_api(final_report_prompt, 'html')
 
             # 3. 이메일 발송
-            subject = f"💪 {settings.USER_NAME}님, {stats['periodName']} 운동 리포트 + 맞춤 루틴이 도착했습니다!"
-            self.email_service.send_email(subject, settings.REPORT_RECIPIENT_EMAIL, report_html)
+            subject = f"💪 {current_user.email}님, {stats['periodName']} 운동 리포트 + 맞춤 루틴이 도착했습니다!"
+            self.email_service.send_email(subject, settings.REPORT_RECIPIENT_EMAIL or current_user.email, report_html)
 
             print(f"[{report_type}] 리포트 생성 및 발송 프로세스를 성공적으로 완료했습니다.")
 

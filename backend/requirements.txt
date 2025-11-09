@@ -7,3 +7,6 @@ psycopg2-binary
 pytest
 httpx
 pydantic-settings
+alembic
+passlib[bcrypt]
+python-jose[cryptography]

@@ -46,36 +46,67 @@ pyenv local 3.12.0
 
 ### 2. 환경 변수 설정
 
-`backend` 디렉토리에 있는 `.env.example` 파일을 `.env` 파일로 복사한 후, 자신의 환경에 맞게 값을 수정해주세요. 이 파일은 민감한 정보(API 키, 비밀번호 등)를 관리합니다.
+프로젝트 루트 디렉토리에 `.env` 파일을 생성하고, `backend/.env.example` 파일의 내용을 복사하여 자신의 환경에 맞게 값을 수정해주세요. 이 파일은 민감한 정보(API 키, 비밀번호 등)를 관리합니다.
 
 ```bash
-cp backend/.env.example backend/.env
+cp backend/.env.example .env
 ```
 
-이후 `backend/.env` 파일을 열어 각 변수에 해당하는 값을 입력합니다.
+이후 `.env` 파일을 열어 각 변수에 해당하는 값을 입력합니다. 특히 `SECRET_KEY`는 반드시 안전한 값으로 변경해야 합니다.
 
 ### 3. Docker를 이용한 전체 서비스 실행
 
 프로젝트 루트 디렉토리에서 다음 명령어를 사용하여 Docker Compose로 전체 애플리케이션을 빌드하고 실행합니다.
 
 ```bash
-docker-compose up --build
+docker-compose up --build -d
 ```
+`-d` 플래그는 백그라운드에서 서비스를 실행합니다.
 
 - 백엔드 서버: `http://localhost:8000`
 - 프론트엔드: `http://localhost:3000`
 
-### 4. 데이터 마이그레이션 (최초 1회 실행)
+### 4. 데이터베이스 마이그레이션
 
-애플리케이션이 처음 실행되면 데이터베이스는 비어있습니다. `/backend/data` 폴더에 제공된 CSV 파일들을 PostgreSQL 데이터베이스로 옮기려면 다음 단계를 따르세요.
+애플리케이션이 처음 실행되면 데이터베이스 스키마를 생성해야 합니다. 다음 명령어를 실행하여 데이터베이스를 최신 상태로 업데이트합니다.
 
-1.  웹 브라우저나 API 테스트 도구(예: Postman)를 사용하여 아래 엔드포인트로 `POST` 요청을 보냅니다.
-    ```
-    http://localhost:8000/api/v1/migrate-data-from-csv
-    ```
-2.  요청이 성공하면 CSV 파일의 모든 데이터가 PostgreSQL 데이터베이스로 복사됩니다. 이 작업은 한 번만 수행하면 됩니다.
+```bash
+docker-compose exec backend alembic upgrade head
+```
+`models.py`의 내용이 변경될 때마다 이 명령어를 다시 실행하여 데이터베이스 스키마를 업데이트해야 합니다.
 
-### 5. 테스트 실행
+### 5. 사용자 생성 및 데이터 임포트
+
+#### 5.1. 사용자 생성 (회원가입)
+API를 사용하기 위해 먼저 사용자를 생성해야 합니다. 웹 브라우저나 API 테스트 도구(예: Postman)를 사용하여 아래 엔드포인트로 `POST` 요청을 보냅니다.
+
+- **URL:** `http://localhost:8000/api/v1/auth/users`
+- **Body (JSON):**
+  ```json
+  {
+    "email": "test@example.com",
+    "password": "your_password"
+  }
+  ```
+
+#### 5.2. 로그인 (토큰 발급)
+사용자를 생성한 후, 로그인을 통해 API 요청에 필요한 `access_token`을 발급받습니다.
+
+- **URL:** `http://localhost:8000/api/v1/auth/token`
+- **Body (form-data):**
+  - `username`: `test@example.com`
+  - `password`: `your_password`
+
+요청이 성공하면 `access_token`이 포함된 응답을 받게 됩니다.
+
+#### 5.3. (선택) CSV 데이터 임포트
+`/backend/data` 폴더에 제공된 CSV 파일들을 현재 로그인된 사용자의 데이터로 가져올 수 있습니다.
+
+- **URL:** `http://localhost:8000/api/v1/migrate-data-from-csv`
+- **Method:** `POST`
+- **Headers:** `Authorization: Bearer <your_access_token>`
+
+### 6. 테스트 실행
 
 백엔드 테스트를 실행하여 모든 것이 정상적으로 동작하는지 확인할 수 있습니다.
 
@@ -90,32 +121,22 @@ pip install -r requirements.txt
 python -m pytest
 ```
 
-### 6. (선택) 개별 서비스 실행
-
-Docker를 사용하지 않고 각 서비스를 직접 실행할 수도 있습니다.
-
-**백엔드 (FastAPI):**
-```bash
-cd backend
-# .env 파일 설정 및 Python 3.12 활성화 확인
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
-
-**프론트엔드 (React):**
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
 ## API 엔드포인트
 
 -   `GET /`: 서버 상태 확인
--   `POST /api/v1/migrate-data-from-csv`: 로컬 CSV 데이터를 PostgreSQL로 마이그레이션
+
+#### 인증 (Auth)
+-   `POST /api/v1/auth/users`: 신규 사용자 생성 (회원가입)
+-   `POST /api/v1/auth/token`: 로그인 및 액세스 토큰 발급
+-   `GET /api/v1/auth/users/me`: 현재 로그인된 사용자 정보 확인 (🔒 Auth Required)
+
+#### 데이터 관리 (🔒 Auth Required)
+-   `POST /api/v1/migrate-data-from-csv`: 로컬 CSV 데이터를 현재 사용자의 데이터로 마이그레이션
 -   `GET /api/v1/dashboard-data`: 대시보드에 필요한 데이터 제공
--   `POST /api/v1/exercises`: 새로운 운동 정보 추가
+-   `POST /api/v1/exercises`: 새로운 운동 정보 추가 (현재는 인증 없이 사용 가능)
+-   `GET /api/v1/workout-logs`: 현재 사용자의 운동 기록 조회
 -   `POST /api/v1/workout-logs`: 새로운 운동 기록 추가
+-   `GET /api/v1/inbody-records`: 현재 사용자의 인바디 기록 조회
 -   `POST /api/v1/inbody-records`: 새로운 인바디 기록 추가
 -   `POST /api/v1/send-report/{report_type}`: 리포트 생성 및 발송
 -   `POST /api/v1/chat`: 챗봇과 상호작용

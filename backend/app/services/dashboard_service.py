@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 from app import models
 
 class DashboardService:
-    def get_dashboard_data(self, db: Session) -> dict:
+    def get_dashboard_data(self, db: Session, user_id: int) -> dict:
         """
-        Retrieves and processes all data required for the main dashboard.
+        Retrieves and processes all data required for the main dashboard for a specific user.
         """
         three_months_ago = datetime.now().date() - timedelta(days=90)
 
@@ -21,7 +21,11 @@ class DashboardService:
                     continue
 
                 logs = db.query(models.WorkoutLog.date, models.WorkoutLog.weight)\
-                    .filter(models.WorkoutLog.exercise_id == exercise.id, models.WorkoutLog.date >= three_months_ago)\
+                    .filter(
+                        models.WorkoutLog.exercise_id == exercise.id,
+                        models.WorkoutLog.owner_id == user_id,
+                        models.WorkoutLog.date >= three_months_ago
+                    )\
                     .order_by(models.WorkoutLog.date).all()
 
                 daily_max = {}
@@ -48,7 +52,10 @@ class DashboardService:
 
         # 인바디 데이터 조회
         inbody_records = db.query(models.Inbody)\
-            .filter(models.Inbody.date >= three_months_ago)\
+            .filter(
+                models.Inbody.owner_id == user_id,
+                models.Inbody.date >= three_months_ago
+            )\
             .order_by(models.Inbody.date).all()
 
         inbody_chart_data = {

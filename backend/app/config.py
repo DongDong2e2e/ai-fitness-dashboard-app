@@ -23,10 +23,17 @@ class Settings(BaseSettings):
     SENDER_PASSWORD: Optional[str] = None
 
     # PostgreSQL Database Configuration
-    POSTGRES_USER: str = "postgres"
-    POSTGRES_PASSWORD: str = "postgres"
-    POSTGRES_DB: str = "fitness_db"
-    POSTGRES_HOST: str = "db"
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
+    POSTGRES_HOST: str
     POSTGRES_PORT: int = 5432
+
+    # JWT Settings
+    # IMPORTANT: In production, this should be set via an environment variable
+    # You can generate a new secret with: openssl rand -hex 32
+    SECRET_KEY: str = "65ce745718013f4202449c06b8cc084147dfbd474e02ba1c7ed98d3bac3cc934"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
 settings = Settings()

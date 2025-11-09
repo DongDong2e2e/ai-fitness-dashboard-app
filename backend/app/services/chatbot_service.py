@@ -3,6 +3,7 @@ import json
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 
+from app import models
 from app.prompts import chatbot as prompts
 from app.services.gemini_ai import GeminiAIService
 from app.utils import apply_date_range_filter
@@ -11,7 +12,7 @@ class ChatbotService:
     def __init__(self):
         self.gemini_service = GeminiAIService()
 
-    def process_user_message(self, message: str, db: Session):
+    def process_user_message(self, message: str, db: Session, current_user: models.User):
         try:
             tool_calls = self._route_query_to_tools(message)
             if not tool_calls:
@@ -22,10 +23,10 @@ class ChatbotService:
             # 차트 생성 도구 확인
             chart_tool_call = next((call for call in tool_calls if call.get('tool') == 'generate_chart'), None)
             if chart_tool_call:
-                chart_data = self._find_chart_data(chart_tool_call['params'], db)
+                chart_data = self._find_chart_data(chart_tool_call['params'], db, user_id=current_user.id)
                 return {'type': 'chart', 'data': chart_data, 'title': f"{chart_tool_call['params'].get('exercise_name', '')} {chart_tool_call['params'].get('metric', '')} 변화"}
 
-            retrieved_data = self._execute_tool_calls(tool_calls, db)
+            retrieved_data = self._execute_tool_calls(tool_calls, db, user_id=current_user.id)
             final_answer = self._generate_final_response(message, retrieved_data)
             return {'type': 'text', 'content': final_answer}
         except Exception as e:
@@ -42,7 +43,7 @@ class ChatbotService:
         except json.JSONDecodeError:
             return []
 
-    def _execute_tool_calls(self, tool_calls: list, db: Session):
+    def _execute_tool_calls(self, tool_calls: list, db: Session, user_id: int):
         if not tool_calls:
             return "검색할 특정 데이터가 없습니다. 일반적인 대화를 나눠주세요."
 
@@ -53,9 +54,9 @@ class ChatbotService:
             result = f"[Tool: {tool_name}에 대한 결과]\n"
             try:
                 if tool_name == 'search_workout_logs':
-                    result += self._find_workout_data(params, db)
+                    result += self._find_workout_data(params, db, user_id=user_id)
                 elif tool_name == 'search_inbody_records':
-                    result += self._find_inbody_data(params, db)
+                    result += self._find_inbody_data(params, db, user_id=user_id)
                 else:
                     result += "알 수 없는 도구입니다."
             except Exception as e:
@@ -66,8 +67,8 @@ class ChatbotService:
         print(f"2단계 - 도구 실행 및 결과 취합:\n{aggregated_result}")
         return aggregated_result
 
-    def _find_workout_data(self, conditions: dict, db: Session) -> str:
-        query = db.query(models.WorkoutLog).join(models.ExerciseInfo)
+    def _find_workout_data(self, conditions: dict, db: Session, user_id: int) -> str:
+        query = db.query(models.WorkoutLog).join(models.ExerciseInfo).filter(models.WorkoutLog.owner_id == user_id)
 
         if conditions.get("exercise_names"):
             query = query.filter(models.ExerciseInfo.name.in_(conditions["exercise_names"]))
@@ -97,8 +98,8 @@ class ChatbotService:
         ]
         return "검색된 기록 ({}개 중 최근 {}개):\n{}".format(len(filtered_logs), len(recent_logs), "\n".join(formatted_records))
 
-    def _find_inbody_data(self, conditions: dict, db: Session) -> str:
-        query = db.query(models.Inbody)
+    def _find_inbody_data(self, conditions: dict, db: Session, user_id: int) -> str:
+        query = db.query(models.Inbody).filter(models.Inbody.owner_id == user_id)
 
         query = apply_date_range_filter(query, models.Inbody, conditions.get("date_range_start"), conditions.get("date_range_end"))
 
@@ -122,7 +123,7 @@ class ChatbotService:
         
         return "\n".join([format_record(row) for row in filtered_data])
 
-    def _find_chart_data(self, params: dict, db: Session) -> dict:
+    def _find_chart_data(self, params: dict, db: Session, user_id: int) -> dict:
         exercise_name = params.get("exercise_name")
         metric = params.get("metric")
 
@@ -130,16 +131,21 @@ class ChatbotService:
         if not exercise:
             return {"labels": [], "data": []}
 
+        base_query = db.query(models.WorkoutLog).filter(
+            models.WorkoutLog.exercise_id == exercise.id,
+            models.WorkoutLog.owner_id == user_id
+        )
+
         if metric == 'max_weight':
-            query = db.query(
+            query = base_query.with_entities(
                 models.WorkoutLog.date,
                 func.max(models.WorkoutLog.weight).label("metric")
-            ).filter(models.WorkoutLog.exercise_id == exercise.id).group_by(models.WorkoutLog.date).order_by(models.WorkoutLog.date.asc())
+            ).group_by(models.WorkoutLog.date).order_by(models.WorkoutLog.date.asc())
         elif metric == 'total_volume':
-            query = db.query(
+            query = base_query.with_entities(
                 models.WorkoutLog.date,
                 func.sum(models.WorkoutLog.volume).label("metric")
-            ).filter(models.WorkoutLog.exercise_id == exercise.id).group_by(models.WorkoutLog.date).order_by(models.WorkoutLog.date.asc())
+            ).group_by(models.WorkoutLog.date).order_by(models.WorkoutLog.date.asc())
         else:
             return {"labels": [], "data": []}
 

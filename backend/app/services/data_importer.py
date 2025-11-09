@@ -10,15 +10,15 @@ class DataImporterService:
         self.exercise_map = {}
         self.errors = []
 
-    def import_all_data(self, data_path: str):
+    def import_all_data(self, data_path: str, user_id: int):
         self.import_exercise_info(f"{data_path}/운동데이터_텍스트ver_구글 시트 - 운동분류.csv")
-        self.import_inbody_records(f"{data_path}/운동데이터_텍스트ver_구글 시트 - Inbody_data.csv")
-        self.import_workout_logs(f"{data_path}/운동데이터_텍스트ver_구글 시트 - structured_log.csv")
+        self.import_inbody_records(f"{data_path}/운동데이터_텍스트ver_구글 시트 - Inbody_data.csv", user_id=user_id)
+        self.import_workout_logs(f"{data_path}/운동데이터_텍스트ver_구글 시트 - structured_log.csv", user_id=user_id)
         
         return {
             "exercises": self.db.query(models.ExerciseInfo).count(),
-            "inbody_records": self.db.query(models.Inbody).count(),
-            "workout_logs": self.db.query(models.WorkoutLog).count(),
+            "inbody_records": self.db.query(models.Inbody).filter_by(owner_id=user_id).count(),
+            "workout_logs": self.db.query(models.WorkoutLog).filter_by(owner_id=user_id).count(),
             "errors": self.errors
         }
 
@@ -49,7 +49,7 @@ class DataImporterService:
         self.exercise_map = {ex.name: ex.id for ex in self.db.query(models.ExerciseInfo).all()}
         print("Exercise info import complete.")
 
-    def import_inbody_records(self, file_path: str):
+    def import_inbody_records(self, file_path: str, user_id: int):
         print("Importing InBody records...")
         try:
             with open(file_path, mode='r', encoding='utf-8') as csvfile:
@@ -57,10 +57,10 @@ class DataImporterService:
                 for i, row in enumerate(reader, 1):
                     try:
                         record_date = datetime.strptime(row['날짜'], '%Y-%m-%d').date()
-                        existing_record = self.db.query(models.Inbody).filter(models.Inbody.date == record_date).first()
+                        existing_record = self.db.query(models.Inbody).filter_by(date=record_date, owner_id=user_id).first()
                         if not existing_record:
                             validated_data = schemas.InbodyCreate(date=record_date, **row)
-                            db_inbody = models.Inbody(**validated_data.dict())
+                            db_inbody = models.Inbody(**validated_data.dict(), owner_id=user_id)
                             self.db.add(db_inbody)
                     except (ValidationError, ValueError, KeyError) as e:
                         self.errors.append(f"File: {file_path}, Row: {i+1}, Error: {e}")
@@ -70,7 +70,7 @@ class DataImporterService:
             self.errors.append(f"File not found: {file_path}")
         print("InBody records import complete.")
 
-    def import_workout_logs(self, file_path: str):
+    def import_workout_logs(self, file_path: str, user_id: int):
         print("Importing workout logs...")
         if not self.exercise_map:
             self.errors.append("Exercise map is empty. Run import_exercise_info first.")
@@ -98,7 +98,8 @@ class DataImporterService:
                             weight=validated_data.weight,
                             reps_or_time=validated_data.reps_or_time,
                             unit=validated_data.unit,
-                            volume=float(row.get('볼륨(kg)', 0) or 0)
+                            volume=float(row.get('볼륨(kg)', 0) or 0),
+                            owner_id=user_id
                         )
                         logs_to_add.append(db_log)
                     except (ValidationError, ValueError, KeyError) as e:

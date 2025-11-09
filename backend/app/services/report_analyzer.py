@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, distinct
 
 from app import models
-from app.config import settings
 
 # Constants
 NO_DATA = "없음"
@@ -12,19 +11,18 @@ UP_ARROW = " ▲"
 DOWN_ARROW = " ▼"
 
 class ReportAnalyzer:
-    def analyze_data_for_period(self, db: Session, period_type: str):
+    def analyze_data_for_period(self, db: Session, period_type: str, user_id: int):
         today = datetime.now().date()
         start_date, end_date, prev_start_date, prev_end_date, period_name, weeks_in_period = self._get_date_ranges(today, period_type)
 
-        current_stats = self._extract_stats_for_period(db, start_date, end_date)
-        previous_stats = self._extract_stats_for_period(db, prev_start_date, prev_end_date)
+        current_stats = self._extract_stats_for_period(db, start_date, end_date, user_id)
+        previous_stats = self._extract_stats_for_period(db, prev_start_date, prev_end_date, user_id)
 
         avg_workout_days_per_week = self._calculate_avg_workout_days(current_stats, weeks_in_period)
-        pr = self._calculate_pr(db, current_stats, start_date)
-        inbody_changes = self._calculate_inbody_changes(db, start_date, end_date)
+        pr = self._calculate_pr(db, current_stats, start_date, user_id)
+        inbody_changes = self._calculate_inbody_changes(db, start_date, end_date, user_id)
 
         return {
-            'userName': settings.USER_NAME,
             'periodName': period_name,
             'startDate': start_date.strftime('%Y-%m-%d'),
             'endDate': end_date.strftime('%Y-%m-%d'),
@@ -38,20 +36,29 @@ class ReportAnalyzer:
             **inbody_changes
         }
 
-    def _extract_stats_for_period(self, db: Session, start_dt, end_dt):
+    def _extract_stats_for_period(self, db: Session, start_dt, end_dt, user_id: int):
         if not start_dt or not end_dt:
             return self._empty_stats()
 
-        base_query = db.query(models.WorkoutLog).filter(models.WorkoutLog.date.between(start_dt, end_dt))
+        base_query = db.query(models.WorkoutLog).filter(
+            models.WorkoutLog.owner_id == user_id,
+            models.WorkoutLog.date.between(start_dt, end_dt)
+        )
         if not base_query.first():
             return self._empty_stats()
 
-        total_workout_days = db.query(func.count(distinct(models.WorkoutLog.date))).filter(models.WorkoutLog.date.between(start_dt, end_dt)).scalar()
-        total_volume = db.query(func.sum(models.WorkoutLog.volume)).filter(models.WorkoutLog.date.between(start_dt, end_dt)).scalar() or 0
+        total_workout_days = db.query(func.count(distinct(models.WorkoutLog.date))).filter(
+            models.WorkoutLog.owner_id == user_id,
+            models.WorkoutLog.date.between(start_dt, end_dt)
+        ).scalar()
+        total_volume = db.query(func.sum(models.WorkoutLog.volume)).filter(
+            models.WorkoutLog.owner_id == user_id,
+            models.WorkoutLog.date.between(start_dt, end_dt)
+        ).scalar() or 0
 
-        main_focus_body_part = self._get_main_focus(db, start_dt, end_dt)
-        top_exercises = self._get_top_exercises(db, start_dt, end_dt)
-        period_best = self._get_best_performance(db, start_dt, end_dt)
+        main_focus_body_part = self._get_main_focus(db, start_dt, end_dt, user_id)
+        top_exercises = self._get_top_exercises(db, start_dt, end_dt, user_id)
+        period_best = self._get_best_performance(db, start_dt, end_dt, user_id)
 
         return {
             'totalWorkoutDays': total_workout_days,
@@ -64,23 +71,32 @@ class ReportAnalyzer:
     def _empty_stats(self):
         return {'totalWorkoutDays': 0, 'totalVolume': 0, 'mainFocusBodyPart': NO_DATA, 'topExercises': [], 'bestPerformance': {'exercise': NO_DATA, 'weight': 0, 'reps': 0}}
 
-    def _get_main_focus(self, db: Session, start_dt, end_dt):
+    def _get_main_focus(self, db: Session, start_dt, end_dt, user_id: int):
         category_vol = db.query(models.ExerciseInfo.category, func.sum(models.WorkoutLog.volume).label('vol'))\
             .join(models.WorkoutLog, models.ExerciseInfo.id == models.WorkoutLog.exercise_id)\
-            .filter(models.WorkoutLog.date.between(start_dt, end_dt))\
+            .filter(
+                models.WorkoutLog.owner_id == user_id,
+                models.WorkoutLog.date.between(start_dt, end_dt)
+            )\
             .group_by(models.ExerciseInfo.category).order_by(func.sum(models.WorkoutLog.volume).desc()).first()
         return category_vol[0] if category_vol else NO_DATA
 
-    def _get_top_exercises(self, db: Session, start_dt, end_dt):
+    def _get_top_exercises(self, db: Session, start_dt, end_dt, user_id: int):
         top_exercises_query = db.query(models.ExerciseInfo.name, func.sum(models.WorkoutLog.volume).label('vol'))\
             .join(models.WorkoutLog, models.ExerciseInfo.id == models.WorkoutLog.exercise_id)\
-            .filter(models.WorkoutLog.date.between(start_dt, end_dt))\
+            .filter(
+                models.WorkoutLog.owner_id == user_id,
+                models.WorkoutLog.date.between(start_dt, end_dt)
+            )\
             .group_by(models.ExerciseInfo.name).order_by(func.sum(models.WorkoutLog.volume).desc()).limit(5).all()
         return [{'exercise': name, 'volume': f'{volume:.0f}kg'} for name, volume in top_exercises_query]
 
-    def _get_best_performance(self, db: Session, start_dt, end_dt):
+    def _get_best_performance(self, db: Session, start_dt, end_dt, user_id: int):
         best_perf_log = db.query(models.WorkoutLog).join(models.ExerciseInfo)\
-            .filter(models.WorkoutLog.date.between(start_dt, end_dt))\
+            .filter(
+                models.WorkoutLog.owner_id == user_id,
+                models.WorkoutLog.date.between(start_dt, end_dt)
+            )\
             .order_by(models.WorkoutLog.weight.desc()).first()
         if best_perf_log:
             return {'exercise': best_perf_log.exercise.name, 'weight': best_perf_log.weight, 'reps': best_perf_log.reps_or_time}
@@ -91,23 +107,33 @@ class ReportAnalyzer:
             return round(current_stats['totalWorkoutDays'] / weeks_in_period)
         return 0
 
-    def _calculate_pr(self, db: Session, current_stats, start_date):
+    def _calculate_pr(self, db: Session, current_stats, start_date, user_id: int):
         pr = {'exercise': NO_DATA, 'record': ''}
         if current_stats['bestPerformance']['weight'] > 0:
             best_exercise_name = current_stats['bestPerformance']['exercise']
             best_exercise = db.query(models.ExerciseInfo).filter(models.ExerciseInfo.name == best_exercise_name).first()
             if best_exercise:
                 previous_best_weight = db.query(func.max(models.WorkoutLog.weight))\
-                    .filter(models.WorkoutLog.exercise_id == best_exercise.id, models.WorkoutLog.date < start_date).scalar() or 0
+                    .filter(
+                        models.WorkoutLog.owner_id == user_id,
+                        models.WorkoutLog.exercise_id == best_exercise.id,
+                        models.WorkoutLog.date < start_date
+                    ).scalar() or 0
                 
                 if current_stats['bestPerformance']['weight'] > previous_best_weight:
                     pr['exercise'] = best_exercise_name
                     pr['record'] = f"{current_stats['bestPerformance']['weight']:.1f}kg x {current_stats['bestPerformance']['reps']:.0f}회"
         return pr
 
-    def _calculate_inbody_changes(self, db: Session, start_date, end_date):
-        start_inbody = db.query(models.Inbody).filter(models.Inbody.date < start_date).order_by(models.Inbody.date.desc()).first()
-        end_inbody = db.query(models.Inbody).filter(models.Inbody.date <= end_date).order_by(models.Inbody.date.desc()).first()
+    def _calculate_inbody_changes(self, db: Session, start_date, end_date, user_id: int):
+        start_inbody = db.query(models.Inbody).filter(
+            models.Inbody.owner_id == user_id,
+            models.Inbody.date < start_date
+        ).order_by(models.Inbody.date.desc()).first()
+        end_inbody = db.query(models.Inbody).filter(
+            models.Inbody.owner_id == user_id,
+            models.Inbody.date <= end_date
+        ).order_by(models.Inbody.date.desc()).first()
         if not end_inbody: end_inbody = start_inbody
 
         if end_inbody:

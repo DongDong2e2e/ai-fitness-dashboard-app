@@ -1,6 +1,31 @@
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, Field, EmailStr
 from datetime import date
-from typing import List, Dict, Optional
+from typing import List, Optional
+
+# --- Token Schemas ---
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    email: Optional[str] = None
+
+# --- User Schemas ---
+class UserBase(BaseModel):
+    email: EmailStr
+
+class UserCreate(UserBase):
+    password: str
+
+class User(UserBase):
+    id: int
+    is_active: bool
+    workout_logs: List['WorkoutLog'] = []
+    inbody_records: List['Inbody'] = []
+
+    class Config:
+        orm_mode = True
+        from_attributes = True
 
 # --- Base Models for DB records ---
 class ExerciseInfoBase(BaseModel):
@@ -31,15 +56,11 @@ class WorkoutLog(WorkoutLogBase):
     id: int
     volume: float
     exercise: ExerciseInfo
-
-    @computed_field
-    @property
-    def exercise_name(self) -> str:
-        return self.exercise.name
+    owner_id: int
 
     class Config:
         orm_mode = True
-        from_attributes = True # Pydantic v2
+        from_attributes = True
 
 class InbodyBase(BaseModel):
     date: date
@@ -52,10 +73,14 @@ class InbodyCreate(InbodyBase):
 
 class Inbody(InbodyBase):
     id: int
+    owner_id: int
 
     class Config:
         orm_mode = True
+        from_attributes = True
 
+# Update forward references
+User.model_rebuild()
 
 # --- API Response Models ---
 
@@ -70,9 +95,9 @@ class InbodyChartData(BaseModel):
     fatPercent: List[float]
 
 class DashboardData(BaseModel):
-    pushData: Dict[str, ChartData]
-    pullData: Dict[str, ChartData]
-    legData: Dict[str, ChartData]
+    pushData: dict[str, ChartData]
+    pullData: dict[str, ChartData]
+    legData: dict[str, ChartData]
     inbodyData: InbodyChartData
 
 class CSVMigrationResult(BaseModel):
